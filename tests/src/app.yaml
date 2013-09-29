@@ -1,0 +1,13 @@
+application: gap-restapi
+api_version: 1
+version: 1
+runtime: python27
+threadsafe: yes
+
+libraries:
+- name: webapp2
+  version: latest
+
+handlers:
+- url: /.*
+  script: run_tests # fake url
