@@ -1,3 +1,4 @@
+import json
 import logging
 import webapp2
 
@@ -13,17 +14,17 @@ class JsonRequestHandler(webapp2.RequestHandler):
 
     def get_request_data(self, method, **kwargs):
         data = self.request.body.strip()
-        if data and not self.request.headers.get('Content-Type', '').startswith('application/json'):
+        if data and not self.request.headers.get('Content-Type', '').lower().startswith('application/json'):
                 raise exc.InvalidRequestException("Content-type header must be application/json.")
 
         logging.debug('Request body: %r' % data)
         try:
             if data:
-                data = loads(data)
+                data = json.loads(data)
             else:
                 data = {}
         except Exception, exception:
-            raise exc.InvalidRequestException("Request data is not valid json string.")
+            raise exc.InvalidRequestException("Request data is not valid json string.", exception)
         logging.debug('request quargs: %r' % kwargs)
         data.update(dict([ (key, value) for key, value in kwargs.items() if value != '']))
         data.update(self.request.GET)
@@ -74,13 +75,7 @@ class JsonRequestHandler(webapp2.RequestHandler):
         )))
         return
 
-    def _dispatch(self):
-        """Dispatches the request.
-
-        This will first check if there's a handler_method defined in the
-        matched route, and if not it'll use the method correspondent to the
-        request method (``get()``, ``post()`` etc).
-        """
+    def get_handler(self):
         request = self.request
         handler = request.route.handler_method
         if handler is None:
@@ -92,13 +87,13 @@ class JsonRequestHandler(webapp2.RequestHandler):
             raise exc.NotFoundException("Not found")
 
         # The handler only receives *args if no named variables are set.
-        args, kwargs = request.route_args, request.route_kwargs
+        return handler, request.route_args, request.route_kwargs
+
+    def _dispatch(self):
+        handler, args, kwargs = self.get_handler()
         if args:
             raise exc.InternalServerError("JsonRequestHandler does not allow unnamed parameters.")
-        try:
-            return self.write_response_data(handler, handler(self.get_request_data(handler, **kwargs)))
-        except Exception, e:
-            return self.handle_exception(e, self.app.debug)
+        return self.write_response_data(handler, handler(self.get_request_data(handler, **kwargs)))
 
     def dispatch(self):
 
@@ -120,7 +115,7 @@ class RoutedJsonRequestHandler(JsonRequestHandler):
             routes = []
             for fname, f in [ (fname, f) for fname, f in type(self).__dict__.items() if getattr(f, 'api_method', False) ]:
                 path = self._merge_routes(path_prefix, f.path)
-                routes.append(RouteEx(path, f, methods=f.http_method))
+                routes.append(RouteEx(path, getattr(self, f.__name__), methods=f.http_method))
             self._routes = routes
         return self._routes
 
@@ -136,17 +131,20 @@ class RoutedJsonRequestHandler(JsonRequestHandler):
                 break
         return match
 
-
     def _dispatch(self):
+        handler, args, kwargs = self.get_handler()
+        if args:
+            raise exc.InternalServerError("RoutedJsonRequestHandler does not allow unnamed parameters.")
+        return self.write_response_data(handler, handler(self.get_request_data(handler, **kwargs)))
+
+    def get_handler(self):
         match = self.find_matching_route()
         if match:
             route, args, kwargs = match
-            try:
-                return route.handler(self, *args, **kwargs)
-            except Exception, e:
-                return self.handle_exception(e, self.app.debug)
+            return route.handler, args, kwargs
         else:
-            raise exc.NotFoundException("Resource does not exist.")
+            raise exc.NotFoundException("Not found")
+
 
 class RouteEx(webapp2.Route):
     '''

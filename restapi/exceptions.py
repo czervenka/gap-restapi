@@ -12,7 +12,7 @@ class ApiException(Exception):
         self.description = description
 
     def __str__(self):
-        return "%r %r" % (self.code, self.message)
+        return "%s %s" % (self.code, self.message)
 
 
 class InvalidRequestException(ApiException):

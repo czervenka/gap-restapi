@@ -1,4 +1,3 @@
-import exceptions as exc
 def api_method(in_type, out_type):
 
     def api_method_decorator(f):
@@ -12,8 +11,11 @@ def api_method(in_type, out_type):
 
 def routed_api_method(in_type, out_type, name=None, path=None, http_method='GET'):
 
-    def api_method_decorator(func):
-        f = api_method(in_type, out_type)(func)
+    def api_method_decorator(f):
+        f.in_type = in_type
+        f.out_type = out_type
+        f.api_method = True
+
         if name is None:
             f.name = f.__name__
         else:
