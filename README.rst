@@ -29,4 +29,4 @@ Features
 
 What is still missing?
 ----------------------
-- raise error if decorator misses required variables for get
+- raise an error if decorator misses the required path parameters (get method)
